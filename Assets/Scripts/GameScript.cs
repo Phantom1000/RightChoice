@@ -2,90 +2,115 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.SceneManagement;
 
-public class GameScript : MonoBehaviour
+namespace RightChoice
 {
-    [SerializeField] GameObject targetPref;
-    [SerializeField] Text textPoints;
-    [SerializeField] GameObject endPanel;
-    public static GameScript Instance { get; set; }
-    List<GameObject> targets = new List<GameObject>();
-    int points = 0;
-    const float offsetX = -4.5f;
-    const float offsetY = -4;
-    const float stepX = 2.2f;
-    const float stepY = 2;
-    public List<Dictionary<int, bool>> Positions { get; set; } = new List<Dictionary<int, bool>>();
-    // Start is called before the first frame update
-    void Start()
+    public struct Point
     {
-        Instance = this;
-        for (int i = 0; i < 5; i++)
+        public int X { get; set; }
+        public int Y { get; set;}
+        public Point(int x, int y)
         {
-            Positions.Add(new Dictionary<int, bool>());
-            for (int j = 0; j < 5; j++) Positions[i].Add(j, false);
-        }
-        Restart();
-    }
-
-    public void Restart()
-    {
-        AddPoints(0);
-        endPanel.SetActive(false);
-        for (int i = 0; i < 5; i++)
-        {
-            for (int j = 0; j < 5; j++) Positions[i][j] = false;
-        }
-        StartCoroutine(Spawn());
-    }
-
-    bool CheckEnd()
-    {
-        int n = 0;
-        for (int i = 0; i < 5; i++)
-            for (int j = 0; j < 5; j++)
-                if (Positions[i][j]) n++;
-        if (n == 25) return true;
-        return false;
-    }
-
-    bool CheckRow(int i)
-    {
-        int n = 0;
-        for (int j = 0; j < 5; j++)
-            if (Positions[i][j]) n++;
-        if (n == 5) return true;
-        return false;
-    }
-
-    IEnumerator Spawn()
-    {
-        while (!CheckEnd())
-        {
-            int m = Random.Range(0, 5);
-            while(CheckRow(m)) m = Random.Range(0, 5);
-            int n = Random.Range(0, 5);
-            while(Positions[m][n]) n = Random.Range(0, 5);
-            targets.Add(Instantiate(targetPref, new Vector2(offsetX + n * stepX, offsetY + m * stepY), Quaternion.identity));
-            targets[targets.Count - 1].GetComponent<TargetScript>().Row = m;
-            targets[targets.Count - 1].GetComponent<TargetScript>().Column = n;
-            Positions[m][n] = true;
-            yield return new WaitForSeconds(1f);
+            X = x;
+            Y = y;
         }
     }
-
-    public void AddPoints(int n)
+    public class GameScript : MonoBehaviour
     {
-        points += n;
-        textPoints.text = "Очки: " + points;
-    }
+        [SerializeField] private GameObject _targetPref;
+        [SerializeField] private Text _textPoints;
+        [SerializeField] private Text _textTime;
+        [SerializeField] private Text _countPoints;
+        [SerializeField] private Text _countTime;
+        [SerializeField] private GameObject _endPanel;
+        [SerializeField] public float _scaleSpeed;
+        [SerializeField] private float _spawnTime;
+        [SerializeField] private GameObject _canvas;
+        public float ScaleSpeed 
+        {
+            get { return _scaleSpeed; }
+        }
+        public GameObject Canvas
+        {
+            get { return _canvas; }
+        }
+        public static GameScript Instance { get; set; }
+        public List<Point> FreePoints = new List<Point>();
+        private List<GameObject> targets = new List<GameObject>();
+        private int points = 0;
+        private float time = 0;
+        private float offsetX = -4.2f * Screen.width / 567;
+        private float offsetY = -4f * Screen.height / 498;
+        private float stepX = 2.2f * Screen.width / 567;
+        private float stepY = 2 * Screen.height / 498;
 
-    public void GameOver()
-    {
-        endPanel.SetActive(true);
-        StopAllCoroutines();
-        foreach (GameObject target in targets) Destroy(target);
-        targets.Clear();
-        points = 0;
+        private void Start()
+        {
+            if (MenuScript.ScaleSpeed != 0) _scaleSpeed = MenuScript.ScaleSpeed;
+            else _scaleSpeed = 1f;
+            _spawnTime = 1f;
+            Instance = this;
+            ClearPoints();
+            AddPoints(0);
+            _endPanel.SetActive(false);
+            StartCoroutine(Spawn());
+            AddTime(0f);
+        }
+
+        private void ClearPoints()
+        {
+            FreePoints.Clear();
+            for (int i = 0; i < 5; i++)
+            {
+                for (int j = 0; j < 5; j++) FreePoints.Add(new Point(i, j));
+            }
+        }
+
+        private void Restart()
+        {
+            SceneManager.LoadScene("Menu");
+        }
+
+        private IEnumerator Spawn()
+        {
+            while (true)
+            {
+                if (FreePoints.Count > 0)
+                {
+                    int n = Random.Range(0, FreePoints.Count);
+                    targets.Add(Instantiate(_targetPref, new Vector2(offsetX + FreePoints[n].X * stepX, offsetY + FreePoints[n].Y * stepY), Quaternion.identity));
+                    targets[targets.Count - 1].GetComponent<TargetScript>().currentPoint = FreePoints[n];
+                    FreePoints.RemoveAt(n);
+                    yield return new WaitForSeconds(_spawnTime);
+                    AddTime(_spawnTime);
+                }
+            }
+        }
+
+        private void AddTime(float f)
+        {
+            time+=f;
+            _textTime.text = "Времени прошло: " + (int)time;
+        }
+
+        public void AddPoints(int n)
+        {
+            points += n;
+            _textPoints.text = "Очки: " + points;
+        }
+
+        public void GameOver()
+        {
+            _endPanel.SetActive(true);
+            _countPoints.text = "Счет: " + points;
+            _countTime.text = "Время: " + (int)time;
+            _textPoints.text = "";
+            _textTime.text = "";
+            StopAllCoroutines();
+            foreach (GameObject target in targets) Destroy(target);
+            targets.Clear();
+            ClearPoints();
+        }
     }
 }
